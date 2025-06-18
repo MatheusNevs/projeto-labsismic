@@ -1,92 +1,120 @@
 #include <msp430f5529.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "lib/i2c.h"
 #include "lib/ssd1306.h"
 #include "lib/adc.h"
 #include "lib/buzzer.h"
 
+// --- Funções auxiliares ---
 
-void main(void) {
-    WDTCTL = WDTPW | WDTHOLD;
+float calcular_distancia(unsigned int adc_val)
+{
+    float tensao = (adc_val / 4095.0) * 3.3;
+    return 4800 / (tensao * 200 - 20);
+}
 
-    TA1CTL = TASSEL_2 + MC_2 + TACLR;
+unsigned int calcular_delta_ciclos(unsigned int tempo_atual, unsigned int tempo_anterior)
+{
+}
+
+float calcular_velocidade(float anterior, float atual, unsigned int tempo_atual, unsigned int tempo_anterior)
+{
+    unsigned int delta_ciclos = (atual >= anterior) ? (atual - anterior) : (0xFFFF - anterior + atual + 1);
+    return (anterior - atual) / delta_ciclos;
+}
+
+unsigned int definir_categoria(float distancia, float velocidade)
+{
+    if (distancia < 10 || distancia > 80)
+        return 0;
+
+    if (distancia <= 20)
+        return 4;
+    if (distancia < 30)
+        return (velocidade > 10) ? 4 : 3;
+    if (distancia < 50)
+        return (velocidade > 10) ? 3 : 2;
+    return (velocidade > 10) ? 2 : 1;
+}
+
+void exibir_distancia(float distancia)
+{
+    char buffer[3];
+    sprintf(buffer, "%d", (int)distancia);
+    ssd1306_set_cursor(0, 0);
+    ssd1306_print(buffer);
+}
+
+void emitir_som_por_categoria(unsigned int categoria)
+{
+    switch (categoria)
+    {
+    case 4:
+        buzzer_on();
+        __delay_cycles(300000); // som contínuo
+        break;
+    case 3:
+        buzzer_on();
+        __delay_cycles(300000);
+        buzzer_off();
+        __delay_cycles(200000);
+        break;
+    case 2:
+        buzzer_on();
+        __delay_cycles(300000);
+        buzzer_off();
+        __delay_cycles(600000);
+        break;
+    case 1:
+        buzzer_on();
+        __delay_cycles(300000);
+        buzzer_off();
+        __delay_cycles(1000000);
+        break;
+    }
+}
+
+// --- Função principal ---
+
+void main(void)
+{
+    WDTCTL = WDTPW | WDTHOLD;         // Desativa Watchdog
+    TA1CTL = TASSEL_2 + MC_2 + TACLR; // SMCLK, modo contínuo, reset
 
     i2c_init();
     ssd1306_init();
     setup_adc();
     buzzer_init();
 
-    char buffer[3];
-    unsigned int adc_val, tempo_anterior = 0, tempo_atual = 0, delta_ciclos = 0, categoria = 0;
-    float tensao, distancia_atual = 0, distancia_anterior = 0, velocidade = 0;
+    unsigned int adc_val;
+    unsigned int tempo_anterior = 0, tempo_atual = 0, delta_ciclos = 0;
+    float tensao = 0, distancia_atual = 0, distancia_anterior = 0, velocidade = 0;
+    unsigned int categoria = 0;
 
     ssd1306_clear();
-    ssd1306_set_cursor(0, 0);
 
-
-
-    while (1) {
-        // leitura da tensao
+    while (1)
+    {
         adc_val = ler_adc();
-        tensao = (adc_val / 4095.0) * 3.3;
 
-        // medicao da distancia
         distancia_anterior = distancia_atual;
-        distancia_atual = 4800 / (tensao * 200 - 20);
+        distancia_atual = calcular_distancia(adc_val);
 
-        // tempo de medicao
         tempo_atual = TA1R;
-        delta_ciclos = (tempo_atual >= tempo_anterior)? (tempo_atual - tempo_anterior) : (0xFFFF - tempo_anterior + tempo_atual + 1);
+        velocidade = calcular_velocidade(distancia_anterior, distancia_atual, tempo_atual, tempo_anterior);
         tempo_anterior = tempo_atual;
 
-        // velocidade em cm/s
-        velocidade = (distancia_anterior - distancia_atual)/(delta_ciclos);
+        categoria = definir_categoria(distancia_atual, velocidade);
 
-        // categorizacao
-        if (distancia_atual >= 10 && distancia_atual <= 80) {
-            if (distancia_atual <= 20)
-                categoria = 4;
-            else if (distancia_atual > 20 && distancia_atual < 30)
-                categoria = 3;
-            else if (distancia_atual > 30 && distancia_atual < 50)
-                categoria = 2;
-            else if (distancia_atual > 50 && distancia_atual < 80)
-                categoria = 1;
-
-            // velocidade > 10cm/s
-            if (velocidade > 10)
-                categoria = categoria == 4? 4: categoria + 1;
-        } else {
-            categoria = 0;
+        if (categoria > 0)
+        {
+            exibir_distancia(distancia_atual);
+            emitir_som_por_categoria(categoria);
         }
-
-        if (categoria > 0 && categoria <5) {
-            int d = (int)(distancia_atual);
-            sprintf(buffer, "%d", d);
-            ssd1306_set_cursor(0, 0);
-            ssd1306_print(buffer);
-
-
-        if (categoria == 4) { // categoria 4
-            // Som contínuo
-            buzzer_on();
-            __delay_cycles(300000); // breve delay para exibição
-        } else {
-            // Bip intermitente
-            buzzer_on();
-            __delay_cycles(300000); // som por 300ms
-            buzzer_off();
-
-            if (categoria == 3) { // categoria 3
-                __delay_cycles(200000); // intervalo de 200ms
-            } else if (categoria == 2) { // categoria 2
-                __delay_cycles(600000); // 600ms
-            } else if (categoria == 1) { // categoria 1
-                __delay_cycles(1000000); // 1s
-            }
-        }
-        } else { // categoria 0
+        else
+        {
             ssd1306_clear();
             buzzer_off();
         }
