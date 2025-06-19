@@ -1,6 +1,5 @@
 #include <msp430f5529.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "intrinsics.h"
 #include "lib/i2c.h"
@@ -12,7 +11,6 @@ volatile unsigned int adc_val;
 volatile float distancia_atual = 0, distancia_anterior = 0;
 volatile float velocidade = 0;
 volatile unsigned int categoria = 0;
-volatile unsigned int nova_medida = 0;
 
 unsigned int tempo_anterior = 0;
 
@@ -32,11 +30,9 @@ unsigned int calcular_delta_ciclos(unsigned int atual, unsigned int anterior)
 float calcular_velocidade(float anterior, float atual, unsigned int tempo_atual, unsigned int tempo_anterior)
 {
     unsigned int delta_ciclos = calcular_delta_ciclos(tempo_atual, tempo_anterior);
-
     if (delta_ciclos == 0)
-        return 0; // evita divisão por zero
-
-    float delta_tempo = delta_ciclos / 32768.0; // tempo em segundos
+        return 0;
+    float delta_tempo = delta_ciclos / 32768.0;
     return (anterior - atual) / delta_tempo;
 }
 
@@ -74,82 +70,59 @@ void emitir_som_por_categoria_responsivo()
     {
         buzzer_off();
         estado = 0;
-        categoria_anterior = 0;
         return;
     }
 
-    // Se a categoria mudou, reinicia
     if (categoria != categoria_anterior)
     {
         estado = 0;
-        instante_referencia = TA2R;
+        instante_referencia = agora;
         categoria_anterior = categoria;
     }
 
     switch (estado)
     {
-    case 0: // Liga o buzzer
+    case 0:
         buzzer_on();
-        instante_referencia = TA2R;
+        instante_referencia = agora;
         estado = 1;
         break;
-
-    case 1:                          // Espera buzzer ligado por 300 ms (3276*3 ciclos)
-        if (tempo_decorrido >= 9828) // 300 ms
+    case 1:
+        if (tempo_decorrido >= 9828)
         {
             if (categoria == 4)
-            {
-                estado = 0; // Som contínuo
-            }
+                estado = 0;
             else
             {
                 buzzer_off();
-                instante_referencia = TA2R;
+                instante_referencia = agora;
                 estado = 2;
             }
         }
         break;
-
-    case 2: // Espera silenciosa conforme a categoria
-        if (
-            (categoria == 3 && tempo_decorrido >= 6553) ||  // 200 ms
-            (categoria == 2 && tempo_decorrido >= 19660) || // 600 ms
-            (categoria == 1 && tempo_decorrido >= 32768)    // 1000 ms
-        )
-        {
+    case 2:
+        if ((categoria == 3 && tempo_decorrido >= 6553) ||
+            (categoria == 2 && tempo_decorrido >= 19660) ||
+            (categoria == 1 && tempo_decorrido >= 32768))
             estado = 0;
-        }
         break;
     }
 }
 
-// --- Interrupção do Timer (medição periódica) ---
+// --- Interrupção do Timer ---
 
 #pragma vector = TIMER1_A0_VECTOR
 __interrupt void Timer1_A_ISR(void)
 {
-    char buffer[32];
-
     distancia_anterior = distancia_atual;
 
     adc_val = ler_adc();
     distancia_atual = calcular_distancia(adc_val);
 
     unsigned int tempo_atual = TA2R;
-    sprintf(buffer, "Ciclo atual e anterior: %d.%d\n", tempo_atual, tempo_anterior);
-    printf(buffer);
 
     velocidade = calcular_velocidade(distancia_anterior, distancia_atual, tempo_atual, tempo_anterior);
     tempo_anterior = tempo_atual;
-
-    int parte_inteira = (int)velocidade;
-    int parte_decimal = (int)(velocidade * 100) % 100;
-
-    sprintf(buffer, "Velocidade: %d.%d\n", parte_inteira, parte_decimal);
-    printf(buffer);
-
-    sprintf(buffer, "Distancia: %dcm\n", (int)distancia_atual);
-    printf(buffer);
 
     categoria = definir_categoria(distancia_atual, velocidade);
 
@@ -159,7 +132,7 @@ __interrupt void Timer1_A_ISR(void)
         ssd1306_clear();
 }
 
-// --- Configura Timer para interrupções periódicas ---
+// --- Inicialização ---
 
 void setup_timer_interrupt()
 {
@@ -168,48 +141,21 @@ void setup_timer_interrupt()
     TA1CTL = TASSEL_1 + MC_1;
 }
 
-void setup_timer2_clock(void)
+void setup_timer2_clock()
 {
     TA2CTL = TASSEL_1 | MC_2 | TACLR;
-    // TASSEL_1: Usa ACLK (32.768 Hz)
-    // MC_2: Modo contínuo (conta até 0xFFFF e reinicia)
-    // TACLR: Limpa o contador no início
-}
-
-// --- Função principal ---
-
-void uart_init(void)
-{
-    // Configura os pinos P4.4 = TXD e P4.5 = RXD para função UART
-    P4SEL |= BIT4 + BIT5;
-    P4DIR |= BIT4; // TXD como saída
-
-    UCA1CTL1 |= UCSWRST;           // Reset UART para configurar
-    UCA1CTL1 = UCSSEL_2 | UCSWRST; // SMCLK, manter em reset
-    UCA1BR0 = 104;                 // Divisor para 9600 baud com 1 MHz clock
-    UCA1BR1 = 0;
-    UCA1MCTL = UCBRS_1;   // Modulação
-    UCA1CTL1 &= ~UCSWRST; // Libera UART
-}
-
-int fputc(int c, FILE *stream)
-{
-    while (!(UCA1IFG & UCTXIFG))
-        ;          // espera buffer vazio
-    UCA1TXBUF = c; // envia caractere
-    return c;
 }
 
 void clock_init(void)
 {
-    UCSCTL3 = SELREF_2;                 // Fator de referência = REFOCLK (32768 Hz)
-    UCSCTL4 = SELA_2 + SELS_3 + SELM_3; // ACLK = REFOCLK, SMCLK e MCLK = DCO
-    UCSCTL1 = DCORSEL_0;                // DCO range = 1 MHz
-    UCSCTL2 = FLLD_0 + 30;              // Fator de multiplicação DCO (30*32768 ~ 1 MHz)
-    __bis_SR_register(SCG0);            // Desabilita o FLL enquanto configurando
-    UCSCTL5 = 0;                        // Desabilita divisores
-    __bic_SR_register(SCG0);            // Reabilita FLL
-    __delay_cycles(50000);              // Aguarda estabilidade do clock
+    UCSCTL3 = SELREF_2;
+    UCSCTL4 = SELA_2 + SELS_3 + SELM_3;
+    UCSCTL1 = DCORSEL_0;
+    UCSCTL2 = FLLD_0 + 30;
+    __bis_SR_register(SCG0);
+    UCSCTL5 = 0;
+    __bic_SR_register(SCG0);
+    __delay_cycles(50000);
 }
 
 void main(void)
@@ -217,8 +163,6 @@ void main(void)
     WDTCTL = WDTPW | WDTHOLD;
 
     clock_init();
-    uart_init();
-
     i2c_init();
     ssd1306_init();
     setup_adc();
@@ -227,11 +171,8 @@ void main(void)
     setup_timer2_clock();
 
     __enable_interrupt();
-
     ssd1306_clear();
 
     while (1)
-    {
         emitir_som_por_categoria_responsivo();
-    }
 }
