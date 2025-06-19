@@ -2,6 +2,9 @@
 #include "../lib/i2c.h"
 
 void i2c_init(void) {
+    UCB0CTL1 |= UCSWRST;
+    UCB0CTL1 &= ~UCSWRST;
+
     P3SEL |= BIT0 + BIT1;
     UCB0CTL1 |= UCSWRST;
     UCB0CTL0 = UCMST + UCMODE_3 + UCSYNC;

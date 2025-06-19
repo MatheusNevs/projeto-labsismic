@@ -11,6 +11,7 @@ static void ssd1306_command(uint8_t cmd) {
     UCB0TXBUF = cmd;
     while (!(UCB0IFG & UCTXIFG));
     UCB0CTL1 |= UCTXSTP;
+    while (UCB0CTL1 & UCTXSTP);
 }
 
 static void ssd1306_data(uint8_t data) {
