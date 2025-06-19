@@ -1,8 +1,7 @@
 #ifndef BUZZER_H
 #define BUZZER_H
 
-void buzzer_init(void);
-void buzzer_on(void);
-void buzzer_off(void);
+void init_buzzer(void);
+void bip_by_category(unsigned int category);
 
 #endif
