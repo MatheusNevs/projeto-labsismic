@@ -1,4 +1,5 @@
 #include "../lib/display.h"
+#include "../lib/font16x16.h"
 #include "../lib/font5x7.h"
 #include <msp430.h>
 #include <stdio.h>
@@ -48,31 +49,82 @@ void ssd1306_clear(void) {
   }
 }
 
-void ssd1306_set_cursor(uint8_t col, uint8_t page) {
+// 5x7
+
+// void ssd1306_set_cursor_1p(uint8_t col, uint8_t page) {
+//   ssd1306_command(0x21);
+//   ssd1306_command(col);
+//   ssd1306_command(127);
+//   ssd1306_command(0x22);
+//   ssd1306_command(page);
+//   ssd1306_command(7);
+// }
+
+// void ssd1306_draw_char(char c) {
+//   if (c < '0' || c > '9')
+//     return;
+//   const uint8_t *bitmap = font5x7[c - '0'];
+//   uint8_t i;
+//   for (i = 0; i < 5; i++) {
+//     ssd1306_data(bitmap[i]);
+//   }
+//   ssd1306_data(0x00);
+// }
+
+// void ssd1306_print(const char *str) {
+//   while (*str) {
+//     ssd1306_draw_char(*str++);
+//   }
+// }
+
+// void display_distance(float distancia) {
+//   char buffer[3];
+//   sprintf(buffer, "%d", (int)distancia);
+//   ssd1306_set_cursor(0, 0);
+//   ssd1306_print(buffer);
+// }
+
+// 5x7
+
+// 16x16
+
+void ssd1306_set_cursor_2p(uint8_t col, uint8_t page) {
   ssd1306_command(0x21);
   ssd1306_command(col);
   ssd1306_command(127);
   ssd1306_command(0x22);
   ssd1306_command(page);
-  ssd1306_command(7);
+  ssd1306_command(page + 1);
 }
 
-void ssd1306_draw_char(char c) {
+void ssd1306_draw_char_16px(char c) {
   if (c < '0' || c > '9')
     return;
-  const uint8_t *bitmap = font5x7[c - '0'];
-  uint8_t i;
-  for (i = 0; i < 5; i++) {
-    ssd1306_data(bitmap[i]);
+  const uint8_t *bmp = font16x16[c - '0'];
+
+  uint8_t col = 0;
+  for (col = 0; col < 16; col++) {
+    uint8_t pg = 0;
+    for (pg = 0; pg < 2; pg++) {
+      ssd1306_data(bmp[col * 2 + pg]);
+    }
   }
-  ssd1306_data(0x00);
 }
 
-void ssd1306_print(const char *str) {
+void ssd1306_print_16px(const char *str) {
   while (*str) {
-    ssd1306_draw_char(*str++);
+    ssd1306_draw_char_16px(*str++);
   }
 }
+
+void display_distance_16px(float distancia) {
+  char buffer[5];
+  sprintf(buffer, "%d", (int)distancia);
+  ssd1306_set_cursor_2p(48, 3);
+  ssd1306_print_16px(buffer);
+}
+
+// 16x16
 
 void init_display() {
   // Inicializacao do I2C
@@ -108,15 +160,10 @@ void init_display() {
   ssd1306_command(0x8D);
   ssd1306_command(0x14);
   ssd1306_command(0x20);
-  ssd1306_command(0x00);
+  ssd1306_command(0x01);
   ssd1306_command(0xAF);
 }
 
-void display_distance(float distancia) {
-  char buffer[3];
-  sprintf(buffer, "%d", (int)distancia);
-  ssd1306_set_cursor(0, 0);
-  ssd1306_print(buffer);
-}
+void display_distance(float distancia) { display_distance_16px(distancia); }
 
 void display_clear() { ssd1306_clear(); }
