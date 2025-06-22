@@ -13,5 +13,5 @@ void init_clock(void) {
   __delay_cycles(50000);
 
   // Timer A2 para contagem
-  TA2CTL = TASSEL_1 | MC_2 | TACLR;
+  TA2CTL = TASSEL_1 | MC_2 | TACLR | ID_3;
 }

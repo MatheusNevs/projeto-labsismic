@@ -34,7 +34,7 @@ static float calculate_speed(float anterior, float atual,
       calculate_delta_cycles(current_time, previous_time);
   if (delta_cycles == 0)
     return 0;
-  float delta_time = delta_cycles / 32768.0;
+  float delta_time = delta_cycles / 4096;
   return (anterior - atual) / delta_time;
 }
 
