@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "intrinsics.h"
+#include "lib/button.h"
 #include "lib/buzzer.h"
 #include "lib/clock.h"
 #include "lib/display.h"
@@ -17,10 +18,10 @@ void main(void) {
   init_display();
   init_buzzer();
   init_interrupt_timer();
+  init_button();
 
   __enable_interrupt();
   display_clear();
-
   while (1)
     bip_by_category(get_category());
 }
