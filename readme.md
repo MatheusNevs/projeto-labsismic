@@ -46,7 +46,7 @@ A solução consiste em um sistema embarcado que utilizada um sensor infravermel
 - **Protoboard:** Conectada à alimentação 5v da MSP430f5529 e ao GND para facilitação de alimentação.
 - **Sensor Sharp GP2Y0A21YK0F:** Conectado no 5v (cabo vermelho) e no GND (cabo preto) da protoboard, a saída analógica (cabo amarelo) conectado ao pino 6.0 da MSP (canal ADC).
 - **Buzzer:** Conectado ao pino de saída PWM (P1.2) do MSP430 e ao GND da protoboard.
-- **Display OLED SSD1306:** Comunicação I2C via P3.0 (SDA) e P3.1 (SCL) do MSP430.
+- **Display OLED SSD1306:** Comunicação I2C via P3.0 (SDA) e P3.1 (SCL) do MSP430, alimentado com 5v e aterrado no GND da protoboard.
 
 ## Implementação
 
